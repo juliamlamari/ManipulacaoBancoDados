@@ -1,0 +1,148 @@
+---
+title: Desafio 4
+editor: visual
+author: Bruno Shimooka 277129, Eduardo Amorim 277141, Júlia Lamari 277179
+format: pdf
+execute:
+  echo: TRUE
+  warning: FALSE
+  message: FALSE
+---
+
+```{r}
+# Carregar pacotes
+library(tidyverse)
+library(lubridate)
+library(leaflet)
+library(readr)
+library(geosphere)
+library(DT)
+library(htmlwidgets)
+library(htmltools)
+
+# Caminho do arquivo
+arquivo <- "archive.zip"
+
+# Função principal
+analisa_aeronave <- function(tail_number, arquivo) {
+  
+  # Tibble vazio para armazenar os dados filtrados
+  filtrados <- tibble()
+  
+  # Função para processar cada chunk
+  processar_chunk <- function(chunk, pos) {
+    chunk_filtrado <- chunk %>% filter(TAIL_NUMBER == tail_number)
+    filtrados <<- bind_rows(filtrados, chunk_filtrado)
+  }
+  
+  # Ler o arquivo em chunks (100k linhas por vez)
+  flights <- read_csv_chunked(
+    file = unz(arquivo, "flights.csv"),
+    callback = DataFrameCallback$new(processar_chunk),
+    chunk_size = 100000
+  )
+  
+  # Ler tabelas auxiliares
+  airlines <- read_csv(unz(arquivo, "airlines.csv"))
+  airports <- read_csv(unz(arquivo, "airports.csv"))
+  
+  # Criar coluna datetime e organizar tabela
+  tabela_trajetos <- filtrados %>%
+    mutate(
+      SCHEDULED_DEPARTURE = as.integer(SCHEDULED_DEPARTURE),
+      HOUR = SCHEDULED_DEPARTURE %/% 100,
+      MINUTE = SCHEDULED_DEPARTURE %% 100,
+      DATA_HORA = make_datetime(YEAR, MONTH, DAY, HOUR, MINUTE)
+    ) %>%
+    arrange(DATA_HORA)
+  
+  # Adicionar coordenadas dos aeroportos
+  tabela_trajetos <- tabela_trajetos %>%
+    left_join(airports %>% select(IATA_CODE, LATITUDE, LONGITUDE),
+              by = c("ORIGIN_AIRPORT" = "IATA_CODE")) %>%
+    rename(LAT_ORIG = LATITUDE, LON_ORIG = LONGITUDE) %>%
+    left_join(airports %>% select(IATA_CODE, LATITUDE, LONGITUDE),
+              by = c("DESTINATION_AIRPORT" = "IATA_CODE")) %>%
+    rename(LAT_DEST = LATITUDE, LON_DEST = LONGITUDE)
+  
+  # Calcular distância, tempo e velocidade média
+  tabela_trajetos <- tabela_trajetos %>%
+    rowwise() %>%
+    mutate(
+      DISTANCIA_KM = distHaversine(c(LON_ORIG, LAT_ORIG), c(LON_DEST, LAT_DEST)) / 1000,
+      TEMPO_H = SCHEDULED_TIME / 60,
+      VEL_MEDIA = ifelse(!is.na(TEMPO_H) & TEMPO_H > 0, DISTANCIA_KM / TEMPO_H, NA)
+    ) %>%
+    ungroup()
+  
+  # Para performance, limitar mapa aos primeiros 500 voos
+  tabela_mapa <- head(tabela_trajetos, 500)
+  
+  # Criar mapa
+  # Criar trajetos consecutivos seguindo a ordem temporal
+trajetos_consecutivos <- tabela_mapa %>%
+  arrange(DATA_HORA) %>%
+  mutate(ORDEM = row_number()) %>%
+  select(ORDEM, LAT_ORIG, LON_ORIG, LAT_DEST, LON_DEST, VEL_MEDIA, ORIGIN_AIRPORT, DESTINATION_AIRPORT, DATA_HORA)
+
+# Inicializar mapa
+mapa <- leaflet() %>%
+  addProviderTiles("CartoDB.Positron")
+
+# Adicionar linhas consecutivas
+for(i in 1:nrow(trajetos_consecutivos)) {
+  mapa <- mapa %>%
+    addPolylines(
+      lng = c(trajetos_consecutivos$LON_ORIG[i], trajetos_consecutivos$LON_DEST[i]),
+      lat = c(trajetos_consecutivos$LAT_ORIG[i], trajetos_consecutivos$LAT_DEST[i]),
+      color = "blue",
+      weight = scales::rescale(trajetos_consecutivos$VEL_MEDIA[i], to = c(0.5, 2), na.rm = TRUE),
+      popup = paste0(
+        "<b>Origem:</b> ", trajetos_consecutivos$ORIGIN_AIRPORT[i],
+        "<br><b>Destino:</b> ", trajetos_consecutivos$DESTINATION_AIRPORT[i],
+        "<br><b>Data:</b> ", trajetos_consecutivos$DATA_HORA[i],
+        "<br><b>Vel. média:</b> ", round(trajetos_consecutivos$VEL_MEDIA[i],1), " km/h"
+      )
+    )
+}
+
+# Adicionar marcadores de origem e destino
+mapa <- mapa %>%
+  addCircleMarkers(~LON_ORIG, ~LAT_ORIG, color = "green", radius = 3, popup = ~ORIGIN_AIRPORT, data = trajetos_consecutivos) %>%
+  addCircleMarkers(~LON_DEST, ~LAT_DEST, color = "red", radius = 3, popup = ~DESTINATION_AIRPORT, data = trajetos_consecutivos)
+
+  
+  # Retornar tabela e mapa
+  return(list(tabela = tabela_trajetos, mapa = mapa))
+}
+
+# Executar função
+tail_number <- readline(prompt = "Digite o código da aeronave: ")
+resultado <- analisa_aeronave(tail_number, arquivo)
+
+# Visualizar tabela
+View(resultado$tabela)
+
+# Criar tabela interativa
+tabela_html <- datatable(
+  resultado$tabela,
+  options = list(scrollY = "400px", pageLength = 20, scrollX = TRUE),
+  rownames = FALSE
+)
+
+# Criar relatório HTML
+relatorio <- tagList(
+  h2(paste("Relatório da Aeronave:", tail_number)),
+  h3("Tabela de Trajetos"),
+  tabela_html,
+  h3("Mapa dos Voos"),
+  resultado$mapa
+)
+
+save_html(relatorio, "relatorio_aeronave.html")
+
+```
+
+```{r}
+resultado$mapa
+```
