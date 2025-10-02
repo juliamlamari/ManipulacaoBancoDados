@@ -1,0 +1,539 @@
+{
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "---\n",
+        "title: \"desafio10\"\n",
+        "format: html\n",
+        "editor: visual\n",
+        "---\n",
+        "\n",
+        "\n",
+        "-   Introdução ao Polars\n"
+      ],
+      "id": "f8714121"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "#| label: instalar-pyarrow\n",
+        "#| echo: true\n",
+        "\n",
+        "!pip install pyarrow"
+      ],
+      "id": "instalar-pyarrow",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# O '!' no início executa o comando no shell do sistema\n",
+        "print(\"Instalando a biblioteca polars...\")\n",
+        "!pip install polars\n",
+        "\n",
+        "print(\"Instalando a biblioteca fastexcel...\")\n",
+        "!pip install fastexcel\n",
+        "\n",
+        "print(\"Instalação concluída.\")"
+      ],
+      "id": "910f33a5",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# 2. Introdução ao Polars\n",
+        "\n",
+        "## Carregando a Biblioteca\n",
+        "\n",
+        "Com as bibliotecas instaladas, o próximo passo é importá-las para o nosso script. Usamos o alias `pl` como uma convenção da comunidade para nos referirmos ao Polars de forma mais curta.\n",
+        "\n",
+        "#| label: importar-polars\n",
+        "#| echo: true\n",
+        "\n",
+        "# Importa a biblioteca polars e a apelida de 'pl' para facilitar o uso\n",
+        "import polars as pl\n",
+        "\n",
+        "# Imprime a versão para confirmar que a importação funcionou\n",
+        "print(f\"Polars importado com sucesso. Versão: {pl.__version__}\")"
+      ],
+      "id": "5a07fa1e",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "#| label: ler-csv-aeroportos\n",
+        "#| echo: true\n",
+        "\n",
+        "# Lê o arquivo \"airports.csv\" do mesmo diretório do script.\n",
+        "# Esta é a forma mais segura de garantir que o arquivo seja encontrado.\n",
+        "aeroportos = pl.read_csv(\n",
+        "    \"airports.csv\",\n",
+        "    columns=[\"IATA_CODE\", \"CITY\", \"STATE\"]\n",
+        ")\n",
+        "\n",
+        "# Mostra as 2 primeiras linhas do DataFrame criado\n",
+        "print(\"As 2 primeiras linhas do DataFrame 'aeroportos':\")\n",
+        "aeroportos.head(2)"
+      ],
+      "id": "ler-csv-aeroportos",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# ATENÇÃO: Para este código funcionar, coloque o arquivo \"WDIEXCEL.xlsx\"\n",
+        "# na mesma pasta do seu script/notebook.\n",
+        "\n",
+        "# Lê uma planilha específica (\"Country\") de um arquivo Excel.\n",
+        "# Seleciona apenas as colunas \"Short Name\" e \"Region\".\n",
+        "wdi = pl.read_excel(\n",
+        "    \"WDIEXCEL.xlsx\", \n",
+        "    sheet_name=\"Country\",\n",
+        "    columns=[\"Short Name\", \"Region\"]\n",
+        ")\n",
+        "\n",
+        "# Mostra as 2 primeiras linhas para verificar o carregamento.\n",
+        "wdi.head(2)"
+      ],
+      "id": "6b186e94",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# Cria um novo DataFrame do zero a partir de um dicionário.\n",
+        "# As chaves do dicionário viram os nomes das colunas, e os valores viram os dados.\n",
+        "# \"None\" é como representamos valores ausentes (nulos) em Python/Polars.\n",
+        "df = pl.DataFrame({\n",
+        "    \"grupo\": [\"A\", \"A\", \"B\", \"B\", \"C\"],\n",
+        "    \"valor1\": [10, 15, 10, None, 25],\n",
+        "    \"valor2\": [5, None, 20, 30, None]\n",
+        "})\n",
+        "\n",
+        "# Exibe o conteúdo completo do DataFrame que acabamos de criar.\n",
+        "df"
+      ],
+      "id": "8649c0de",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# Seleciona e exibe apenas a coluna \"valor1\" do DataFrame.\n",
+        "# O resultado é um objeto do tipo \"Series\".\n",
+        "df[\"valor1\"]"
+      ],
+      "id": "4b0400d2",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# Calcula a média da coluna \"valor1\".\n",
+        "# O Polars ignora automaticamente os valores nulos (None) nesse cálculo.\n",
+        "df[\"valor1\"].mean()"
+      ],
+      "id": "97cefbc6",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# O método .select() é usado para executar uma ou mais expressões/operações.\n",
+        "# Cada expressão na lista vira uma coluna no DataFrame de resultado.\n",
+        "df.select([\n",
+        "    # Expressão 1: Calcula a média da \"valor1\" e renomeia a coluna para \"media_v1\"\n",
+        "    pl.col(\"valor1\").mean().alias(\"media_v1\"),\n",
+        "    \n",
+        "    # Expressão 2: Calcula a média da \"valor2\". \n",
+        "    # Como não usamos .alias(), o Polars dará um nome padrão à coluna.\n",
+        "    pl.col(\"valor2\").mean()\n",
+        "])"
+      ],
+      "id": "13c2f557",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# Este é um exemplo de \"group by\", uma operação muito comum em análise de dados.\n",
+        "# A lógica é: agrupar, agregar e depois ordenar.\n",
+        "df.group_by(\"grupo\").agg([\n",
+        "    # Dentro de .agg(), passamos uma lista de expressões para calcular em cada grupo.\n",
+        "    \n",
+        "    # 1. Para cada grupo, calcula a média da coluna \"valor1\".\n",
+        "    pl.col(\"valor1\").mean().alias(\"media_valor1\"),\n",
+        "    \n",
+        "    # 2. Para cada grupo, encontra o valor mínimo da coluna \"valor2\".\n",
+        "    pl.col(\"valor2\").min().alias(\"min_valor2\")\n",
+        "    \n",
+        "]).sort(\"grupo\") # No final, ordena o DataFrame resultante pela coluna \"grupo\"."
+      ],
+      "id": "94a0ace0",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# Garanta que \"flights.csv\" está na mesma pasta antes de rodar.\n",
+        "\n",
+        "voos = pl.read_csv(\n",
+        "    \"flights.csv\",  # Caminho correto e simples\n",
+        "    columns=[\"AIRLINE\", \"ARRIVAL_DELAY\", \"DESTINATION_AIRPORT\"],\n",
+        "    \n",
+        "    # Parâmetro corrigido para a versão nova do Polars\n",
+        "    schema_overrides={\n",
+        "        \"AIRLINE\": pl.Utf8,\n",
+        "        \"ARRIVAL_DELAY\": pl.Int32,\n",
+        "        \"DESTINATION_AIRPORT\": pl.Utf8\n",
+        "    }\n",
+        ")\n",
+        "\n",
+        "# Mostra o formato (linhas, colunas) do DataFrame.\n",
+        "voos.shape"
+      ],
+      "id": "b613743e",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "voos.head(3)"
+      ],
+      "id": "a36862f0",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# Este é o código anterior, mas com o nome da coluna corrigido\n",
+        "# para \"atraso_medio\", como o seu próximo comando espera.\n",
+        "\n",
+        "resultado = (\n",
+        "    voos.drop_nulls([\"AIRLINE\", \"DESTINATION_AIRPORT\", \"ARRIVAL_DELAY\"])\n",
+        "    .filter(\n",
+        "        pl.col(\"AIRLINE\").is_in([\"AA\", \"DL\"]) &\n",
+        "        pl.col(\"DESTINATION_AIRPORT\").is_in([\"SEA\", \"MIA\", \"BWI\"])\n",
+        "    )\n",
+        "    .group_by([\"AIRLINE\", \"DESTINATION_AIRPORT\"])\n",
+        "    .agg([\n",
+        "        # Expressão: Calcula a proporção de voos com atraso maior que 30 min.\n",
+        "        # A única mudança está na linha abaixo, no .alias().\n",
+        "        (pl.col(\"ARRIVAL_DELAY\") > 30).mean().alias(\"atraso_medio\")\n",
+        "    ])\n",
+        ")"
+      ],
+      "id": "8cda6a10",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "resultado.sort(\"atraso_medio\")"
+      ],
+      "id": "cdb86716",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "-   Dados Relacionais com Polars\n"
+      ],
+      "id": "804f77a9"
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "import polars as pl\n",
+        "\n",
+        "# Criando o primeiro DataFrame, a \"tabela de clientes\".\n",
+        "# Ele servirá como a base para as nossas operações de junção (join).\n",
+        "clientes = pl.DataFrame({\n",
+        "    \"cliente_id\": [1, 2, 3, 4],\n",
+        "    \"nome\": [\"Ana\", \"Bruno\", \"Clara\", \"Daniel\"]\n",
+        "})\n",
+        "\n",
+        "# Exibe o DataFrame de clientes.\n",
+        "print(\"Tabela de Clientes:\")\n",
+        "print(clientes)"
+      ],
+      "id": "7a8e5c0f",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# Criando o segundo DataFrame, a \"tabela de pedidos\".\n",
+        "pedidos = pl.DataFrame({\n",
+        "    \"pedido_id\": [101, 102, 103, 104, 105],\n",
+        "    # A coluna \"cliente_id\" é a chave que vai conectar esta tabela\n",
+        "    # com a tabela \"clientes\".\n",
+        "    \"cliente_id\": [1, 2, 3, 1, 5], \n",
+        "    \"valor\": [100.50, 250.75, 75.00, 130.00, 79.00]\n",
+        "})\n",
+        "\n",
+        "# Exibe o DataFrame de pedidos.\n",
+        "# Note que o cliente_id=5 fez um pedido, mas não está na tabela de clientes.\n",
+        "# E o cliente_id=4 (Daniel) não fez nenhum pedido.\n",
+        "print(\"Tabela de Pedidos:\")\n",
+        "print(pedidos)"
+      ],
+      "id": "fcfc7c79",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# .join() é o método para combinar dois DataFrames.\n",
+        "res_ij = clientes.join(\n",
+        "    pedidos, \n",
+        "    on=\"cliente_id\", # A coluna usada para fazer a ligação\n",
+        "    how=\"inner\"      # O tipo de join\n",
+        ")\n",
+        "\n",
+        "# O \"inner\" join retorna apenas as linhas onde o \"cliente_id\" existe\n",
+        "# em AMBAS as tabelas (clientes E pedidos).\n",
+        "# Por isso, Daniel (id 4) e o pedido do cliente 5 não aparecerão.\n",
+        "print(\"Resultado do Inner Join:\")\n",
+        "print(res_ij)"
+      ],
+      "id": "e731161a",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# Realiza um \"outer join\".\n",
+        "res_oj = clientes.join(\n",
+        "    pedidos, \n",
+        "    on=\"cliente_id\", \n",
+        "    how=\"outer\"\n",
+        ")\n",
+        "\n",
+        "# O \"outer\" join mantém TODAS as linhas de AMBAS as tabelas.\n",
+        "# - Clientes sem pedidos (Daniel) aparecerão com dados do pedido nulos.\n",
+        "# - Pedidos sem clientes cadastrados (cliente_id 5) aparecerão com dados\n",
+        "#   do cliente nulos.\n",
+        "print(\"Resultado do Outer Join:\")\n",
+        "print(res_oj)"
+      ],
+      "id": "0ff71185",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# Para o \"cross join\", simplesmente removemos o parâmetro \"on\".\n",
+        "# O Polars então entende que deve combinar todas as linhas das duas tabelas.\n",
+        "res_cj = clientes.join(\n",
+        "    pedidos, \n",
+        "    how=\"cross\"\n",
+        ")\n",
+        "\n",
+        "print(\"Resultado do Cross Join (corrigido):\")\n",
+        "print(res_cj)"
+      ],
+      "id": "5f856903",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "print(clientes)"
+      ],
+      "id": "257f7486",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "print(pedidos)"
+      ],
+      "id": "ee31dfd2",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "res = res_ij.group_by([\"nome\", \"cliente_id\"]).agg(pl.col(\"valor\").mean())\n",
+        "print(res)"
+      ],
+      "id": "cd9af23f",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "print(clientes)"
+      ],
+      "id": "6a44edbd",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "print(pedidos)"
+      ],
+      "id": "73005e6f",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "res = (res_oj.with_columns(pl.col(\"valor\") > 100)\n",
+        "       .group_by(\"nome\")\n",
+        "       .agg(pl.col(\"valor\").sum()))\n",
+        "print(res)"
+      ],
+      "id": "c9d9febc",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# Criando a primeira tabela para o próximo exemplo.\n",
+        "vendas = pl.DataFrame({\n",
+        "    \"id_venda\": [1, 2, 3],\n",
+        "    \"id_cl\": [1, 2, 1],  # <-- Nome da coluna do cliente\n",
+        "    \"id_prod\": [101, 102, 103],\n",
+        "    \"qtde\": [2, 1, 1]\n",
+        "})\n",
+        "\n",
+        "print(\"Tabela 'vendas':\")\n",
+        "print(vendas)\n",
+        "\n",
+        "# Criando a segunda tabela.\n",
+        "detalhes_pedidos = pl.DataFrame({\n",
+        "    \"id_ped\": [201, 202, 203],\n",
+        "    \"cl_id\": [1, 2, 1],  # <-- Mesmo dado, nome de coluna diferente\n",
+        "    \"id_prod\": [101, 102, 104],\n",
+        "    \"valor\": [50.00, 75.00, 100.00]\n",
+        "})\n",
+        "\n",
+        "print(\"\\nTabela 'detalhes_pedidos':\")\n",
+        "print(detalhes_pedidos)"
+      ],
+      "id": "2794b9aa",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "print(vendas)"
+      ],
+      "id": "6076405f",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "print(detalhes_pedidos)"
+      ],
+      "id": "25915c9b",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "final = vendas.join(detalhes_pedidos,\n",
+        "                    left_on = [\"id_cl\", \"id_prod\"],\n",
+        "                    right_on = [\"cl_id\", \"id_prod\"],\n",
+        "                    how = \"inner\")\n",
+        "print(final)"
+      ],
+      "id": "d6184a26",
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {},
+      "source": [
+        "# ESTE É O BLOCO FINAL DO SEU ARQUIVO (VERSÃO SIMPLIFICADA E SEGURA)\n",
+        "\n",
+        "from datetime import datetime\n",
+        "\n",
+        "# Pega a data e hora atuais do sistema e formata.\n",
+        "# Não depende de nenhum pacote extra.\n",
+        "data_hora_compilacao = datetime.now().strftime(\"%d de %B de %Y, às %H:%M:%S\")\n",
+        "\n",
+        "# Imprime a mensagem final.\n",
+        "print(f\"Documento compilado com sucesso em: {data_hora_compilacao}\")"
+      ],
+      "id": "bd8cf594",
+      "execution_count": null,
+      "outputs": []
+    }
+  ],
+  "metadata": {
+    "kernelspec": {
+      "display_name": "Python 3",
+      "language": "python",
+      "name": "python3"
+    }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 5
+}
