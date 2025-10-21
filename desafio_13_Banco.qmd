@@ -1,0 +1,182 @@
+---
+title: "Desafio 13"
+author: "Júlia Lamari - 277129"
+output: pdf_document
+date: "2025-10-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# --------- Pacotes ----------
+library(DBI)
+library(RSQLite)
+library(readr)
+library(dplyr)
+```
+
+```{r}
+
+# caminhos exatos dos seus arquivos
+arq_basics     <- "title.basics0.tsv"
+arq_principals <- "title.principals0.tsv"
+arq_ratings    <- "title.ratings.tsv"
+
+# onde salvar o banco SQLite
+arq_sqlite <- "movies.sqlite3"
+if (file.exists(arq_sqlite)) file.remove(arq_sqlite)
+con <- dbConnect(SQLite(), arq_sqlite)
+
+```
+
+```{r}
+basics <- read_tsv(
+  arq_basics,
+  na = c("", "NA", "\\N"),
+  col_types = cols(
+    tconst        = col_character(),
+    titleType     = col_character(),
+    primaryTitle  = col_character(),
+    originalTitle = col_character(),
+    isAdult       = col_integer(),
+    startYear     = col_character(),
+    endYear       = col_character(),
+    runtimeMinutes= col_character(),
+    genres        = col_character()
+  ),
+  progress = TRUE
+)
+
+principals <- read_tsv(
+  arq_principals,
+  na = c("", "NA", "\\N"),
+  col_types = cols(
+    tconst     = col_character(),
+    nconst     = col_character(),
+    category   = col_character(),
+    job        = col_character(),
+    characters = col_character()
+  ),
+  progress = TRUE
+)
+
+ratings <- read_tsv(
+  arq_ratings,
+  na = c("", "NA", "\\N"),
+  col_types = cols(
+    tconst        = col_character(),
+    averageRating = col_double(),
+    numVotes      = col_double()
+  ),
+  progress = TRUE
+)
+
+
+
+```
+
+```{r}
+dbWriteTable(con, "basics", basics, overwrite = TRUE)
+dbWriteTable(con, "ratings", ratings, overwrite = TRUE)
+dbWriteTable(con, "principals", principals, overwrite = TRUE)
+
+dbExecute(con, "CREATE INDEX idx_b_tconst ON basics(tconst)")
+dbExecute(con, "CREATE INDEX idx_r_tconst ON ratings(tconst)")
+dbExecute(con, "CREATE INDEX idx_p_tconst ON principals(tconst)")
+dbExecute(con, "CREATE INDEX idx_b_type   ON basics(titleType)")
+dbExecute(con, "CREATE INDEX idx_r_score  ON ratings(averageRating DESC, numVotes DESC)")
+
+```
+
+```{r}
+"Top-5 filmes por nota"
+
+sql_top5 <- "
+SELECT
+  b.tconst,
+  b.primaryTitle AS titulo,
+  b.startYear    AS ano,
+  r.averageRating AS nota,
+  r.numVotes      AS votos
+FROM ratings r
+JOIN basics  b ON b.tconst = r.tconst
+WHERE b.titleType = 'movie' AND (b.isAdult IS NULL OR b.isAdult = 0)
+ORDER BY r.averageRating DESC, r.numVotes DESC
+LIMIT 5;
+"
+top5 <- dbGetQuery(con, sql_top5)
+top5
+
+```
+
+```{r}
+"Gênero mais frequente entre filmes com nota > 8"
+
+sql_genero <- "
+WITH filmes8 AS (
+  SELECT b.tconst, b.genres
+  FROM basics b
+  JOIN ratings r ON r.tconst = b.tconst
+  WHERE b.titleType = 'movie'
+    AND (b.isAdult IS NULL OR b.isAdult = 0)
+    AND r.averageRating > 8
+    AND b.genres IS NOT NULL
+),
+split AS (
+  SELECT
+    tconst,
+    TRIM(SUBSTR(genres, 1, COALESCE(NULLIF(INSTR(genres, ','),0)-1, LENGTH(genres)))) AS genre,
+    CASE WHEN INSTR(genres, ',') = 0 THEN NULL
+         ELSE SUBSTR(genres, INSTR(genres, ',')+1) END AS rest
+  FROM filmes8
+  UNION ALL
+  SELECT
+    tconst,
+    TRIM(SUBSTR(rest, 1, COALESCE(NULLIF(INSTR(rest, ','),0)-1, LENGTH(rest)))) AS genre,
+    CASE WHEN rest IS NULL OR INSTR(rest, ',')=0 THEN NULL
+         ELSE SUBSTR(rest, INSTR(rest, ',')+1) END AS rest
+  FROM split
+  WHERE rest IS NOT NULL
+)
+SELECT genre, COUNT(*) AS qtd
+FROM split
+WHERE genre IS NOT NULL AND genre <> '\\N'
+GROUP BY genre
+ORDER BY qtd DESC
+LIMIT 1;
+"
+genero_mais_freq <- dbGetQuery(con, sql_genero)
+genero_mais_freq
+
+```
+
+```{r}
+"Top-3 atores/atrizes em filmes com nota > 7.5"
+
+sql_atores <- "
+SELECT
+  p.nconst,
+  COUNT(*) AS qtd_filmes
+FROM principals p
+JOIN basics b  ON b.tconst = p.tconst
+JOIN ratings r ON r.tconst = p.tconst
+WHERE b.titleType = 'movie'
+  AND (b.isAdult IS NULL OR b.isAdult = 0)
+  AND r.averageRating > 7.5
+  AND p.category IN ('actor','actress')
+GROUP BY p.nconst
+ORDER BY qtd_filmes DESC
+LIMIT 3;
+"
+top_atores <- dbGetQuery(con, sql_atores)
+top_atores
+
+```
+
+```{r}
+"Fechar conexão"
+dbDisconnect(con)
+
+```
