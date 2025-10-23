@@ -1,0 +1,39 @@
+---
+title: "Desafio 1"
+format: html
+editor: visual
+---
+
+```{r}
+library(reticulate)
+virtualenv_create("env_me315")
+```
+
+```{r}
+use_virtualenv("env_me315")
+py_install("pandas", envname = "env_me315")
+```
+
+```{r}
+ini <- Sys.time()
+dados <- read.csv(unz('.../dados/flights.csv.zip', "flights.csv"))
+fim <- Sys.time()
+fim - ini
+```
+
+```{r}
+library(readr)
+ini <- Sys.time()
+dados <- read_csv('.../dados/flights.csv.zip')
+fim <- Sys.time()
+fim - ini
+```
+
+```{python}
+import time
+import pandas as pd
+ini = time.time()
+dados = pd.read_csv(".../dados/flights.csv.zip", compression="zip", header=0, sep=",", low_memory=False)
+fim = time.time()
+fim - ini
+```
